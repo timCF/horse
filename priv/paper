@@ -1,0 +1,452 @@
+<h1>Вступление</h1>
+Чуть больше года назад я сделал очень важный в своей жизни поступок - скачал с сайта Microsoft IDE Visual Studio и написал на языке C++ свою первую в жизни программу, как это ни странно - "Hello, World!". За следующие полгода я прочитал небезызвестную книжку Страуструпа, устроился на работу джунор С++ разработчиком, попробовал писать на Lua, Python - но каких-либо значительных успехов не добился - мои библиотеки не работали, программы с трудом компилировались и падали в runtime, указатели указывали не на те участки памяти (которая кстати всегда куда-то утекала), а попытки использовать больше одного потока (С++11 же!) приводили к порче памяти и дедлокам. О том как выглядел код лучше просто промолчать. 
+
+К чему это я? К тому что по моему личному мнению/опыту, императивные языки в силу своих особенностей совершенно не подходят начинающим разработчикам. Без знаний промышленных паттернов программирования, каких-то сведений о работе операционной системы и элементарной культуры кода написать что-то сносное на них очень тяжело. Они дают слишком много свободы и пространства для костылей и велосипедов, в то время как функциональные языки, жёстко ограничивая разработчика в некоторых вещах, оставляют ему не так много возможностей писать плохой код, заставляя думать и развиваться. 
+Примерно полгода назад я понял что пора что-то менять, и после получаса поиска в интернете, нашёл спецификации ЯП Erlang, в статье автор представлял Erlang как "чудесную таблетку" от всех вышеописанных мою проблем, и в общем-то по большей части он оказался прав. Так я начал программировать на Erlang, а затем и на Elixir.
+
+<h1>Elixir Language</h1>
+Elixir - язык, построенный поверх Erlang, результат компиляции - байткод Erlang VM. От Erlang он выгодно отличается простотой синтаксиса и мощным инструментарием для мета-программирования (люди, знакомые с Lisp сразу узнают quote-unquote конструкции). Соответственно, для использования доступен весь функционал Erlang, любые его модули и что самое главное - OTP. 
+Типы данных - те же самые что и в Erlang. Данные - неизменяемые, результат действий с ними - новые данные. В Elixir как и во многих функциональных языках работает принцип "Всё - выражение". Любое выражение вернёт значение.
+У ЯП Elixir есть отличный интерпретатор, который устанавливается вместе с языком, в нём можно опробовать примеры.
+
+<h2>Основные типы данных</h2>
+
+<i>int, float</i>
+<source lang="ruby">
+1 + 1 	# => 2
+3 / 2 	# => 1.5
+1.0 + 3 # => 4.0
+</source>
+
+<i>binary</i>
+<source lang="ruby">
+"Hello"<>" World!" 	# => "Hello World!"
+"Hello #{World!}"	# => "Hello World!"
+"""
+hello
+""" # => "hello\n"
+</source>
+
+<i>atom</i>
+Константа, представляющая собой только своё значение и ничего более. Отдельного логического типа нет: true, false, nil - также атомы, просто для них в языке есть соответствующие соглашения.
+<source lang="ruby">
+is_atom(true) # => true
+is_atom(:true) # => true
+is_atom(:hello) # => true
+</source>
+
+<i>list</i>
+<source lang="ruby">
+[1,2,3,4,"five"]++[6, "seven"] # => [1, 2, 3, 4, "five", 6, "seven"]
+[1,1,2,3,4]--[1,2,3,5] # => [1, 4]
+</source>
+По историческим причинам строки в Erlang представлены именно в виде list, а не в виде binary (в Elixir какрас наоборот), и поэтому list можно представить ещё и так
+<source lang="ruby">
+is_list 'this is list' # => true
+'lst'++[10000] # => [108, 115, 116, 10000]
+</source>
+
+<i>tuple</i>
+Чем-то напоминает list, разница в организации хранения данных в памяти, и соответственно в библиотечных средствах работы с данными.
+<source lang="ruby">
+{:hello, "world"}
+</source>
+
+<i>map</i>
+<source lang="ruby">
+%{2 => 2, :c => {1, 2, 3}, "key1" => 1} 
+#при использовании в качестве ключей только атомов, синтаксис упрощается, а скорость работы увеличивается
+%{a: 1, b: 3, c: "qweqwe"}
+</source>
+
+<i>PID</i>
+Идентификатор процесса VM Erlang. Интерактивный shell интерпретатора - тоже процесс, поэтому воспользуемся функцией self, возвращающей PID процесса из которого она была вызвана
+<source lang="ruby">
+self # => #PID<0.95.0> (конечно число может отличаться от данного)
+</source>
+
+Возможно явно делать преобразования некоторых типов.
+<source lang="ruby">
+:erlang.tuple_to_list {1,2,3} # => [1, 2, 3]
+:erlang.integer_to_binary 123 # => "123"
+:erlang.binary_to_list "abc" # => :abc
+</source>
+
+Также одна из приятностей языка состоит в том что любой терм можно совершенно безболезненно преобразовать в binary и обратно. Сериализация любых данных в одну строчку.
+<source lang="ruby">
+res = :erlang.term_to_binary [:hello, {"world", '!!!'}] # => <<131, 108, 0, 0, 0, 2, 100, 0, 5, 104, 101, 108, 108, 111, 104, 2, 109, 0, 0, 0, 5, 119, 111, 114, 108, 100, 107, 0, 3, 33, 33, 33, 106>>
+:erlang.binary_to_term res # => [:hello, {"world", '!!!'}]
+</source>
+
+<h2>Pattern matching</h2>
+
+Данные можно локально присваивать переменным (глобальных переменных и разделяемой памяти тут нет и быть не может)
+<source lang="ruby">
+x = 1 # => 1
+# теперь x связана c 1
+x # => 1
+# Можно написать даже так как в императивных языках (и оно заработает)
+x = 1+x # => 2
+</source>
+
+Но делать это совершенно не нужно. Код получается проще, красивее и выразительнее если <b>вообще не использовать переменные</b>. Строго говоря, оператор "=" в ЯП Elixir не является присваиванием в привычном для императивных языков смысле. Здесь имеет место pattern matching (сопоставление с образцом). Суть его проще показать на примере
+<source lang="ruby">
+%{a: x, b: 1} = %{a: 1, b: 1} # => %{a: 1, b: 1}
+%{a: x, b: 1} = %{a: 1, b: 2} # => ** (MatchError) no match of right hand side value: %{a: 1, b: 2}
+%{a: x, b: 1} = %{b: 1} # => ** (MatchError) no match of right hand side value: %{b: 1}
+</source>
+
+В терминах императивных языков, pattern matching это комбинация сравнения и присваивания: связынные с каким-либо значением элементы структуры слева от "=" сравниваются с соответствующими элементами структуры справа от "=", а не связанные - связываются с соответствующими им значениями элементов структуры справа. Логично что у структуры справа не может быть несвязынных с каким-либо значением элементов. Если какое-то из сравнений вернуло false, бросается исключение.
+
+Pattern matching также можно (и нужно) делать на бинарных данных.
+<source lang="ruby">
+<< a :: binary-size(5), rest :: binary >> = "hello, world" # => "hello, world"
+a # => "hello"
+rest # => ", world"
+</source>
+
+Кстати, обратите внимание на такой пример:
+<source lang="ruby">
+x = 1 # => 1
+x == 1 # => true
+%{a: x, b: y} = %{a: 12, b: 1} # => %{a: 12, b: 1}
+x # => 12
+</source>
+
+Pattern matching прошёл успешно, исключения нет. Хотя казалось бы, x должна быть связана с 1, а 1 != 12. В этом смысле Elixir отличается от более строгих функциональных языков (в том числе и от Erlang), и именно поэтому использование pattern matching внутри функций часто ведёт к путанице и загромождению кода, и этого нужно избегать. Настоящую мощь сопоставления с образцом можно почувствовать только если использовать его в объявлениях функций и case - выражениях.
+
+<h2>Функции и модули</h2>
+
+Язык функциональный, поэтому главное выразительное средство языка - функция. Функции могут приниматься функциями в качестве аргументов и быть возвращёнными в качестве значений. Функции определяются внутри модулей, модули также могут быть определены внутри других модулей.
+
+<source lang="ruby">
+defmodule Some do
+	
+	defp priv_func(arg) do
+		arg<>"Hello from priv_func!"
+	end
+
+	def pub_func(arg) when is_binary(arg) do
+		arg<>priv_func("Hello from pub_func!\n")
+	end
+
+end
+</source>
+
+Чтобы определить публичную функцию, вызвать которую можно будет вне данного модуля - нужно использовать def, а defp позволяет поределить функцию, доступную только внутри данного модуля (посмотрите насколько это проще по сравнению с Erlang). После имени функции и аргументов могут стоять выражения, называемые guard-выражениями (посмотрите на определение pub_func), они позволяют сузить область определения функции (в математическом смысле).
+
+<source lang="ruby">
+Some.pub_func "Hello from shell!\n" # => "Hello from shell!\nHello from pub_func!\nHello from priv_func!"
+Some.priv_func "Hello" # => ** (UndefinedFunctionError) undefined function: Some.priv_func/1 Some.priv_func("Hello")
+</source>
+
+В ЯП Elixir есть 2 абсолютно равнозначных способа определть лямбду (анонимную функцию)
+
+<source lang="ruby">
+sum = &(&1+&2) # => &:erlang.+/2
+sum.(1,2) # => 3
+sum = fn(x,y) -> x + y end # => #Function<12.106461118/2 in :erl_eval.expr/5>
+sum.(1,2) # => 3
+</source>
+
+Как видно из примера, вызов лямбды отличается от вызова обычной функции только знаком ".". Функциям можно передавать в качестве аргументов не только лямбды, но и обычные функции. Для этого надо поставить перед названием функции знак "&", а после - указать её арность.
+
+<source lang="ruby">
+defmodule Some do
+	
+	def actor(arg1, arg2, func) do
+		func.(arg1, arg2)
+	end
+
+	def div(arg1, arg2) do
+		arg1 / arg2
+	end
+
+end
+
+sum = &(&1+&2) # => &:erlang.+/2
+Some.actor(1,2,sum) # => 3
+Some.actor(3,4, &Some.div/2 ) # => 0.75
+</source>
+
+Решение задачи "конь Эйлера"
+
+Когда я только начинал изучать С++ и готовился к вступительным экзаменам в магистратуру ВМК (наивно полагая что там научат круто кодить), в одном из вариантов вступительных экзаменов мне попалась эта задача, и я её тогда не смог решить. Почему-то вчера она мне опять вспомнилась, и накидав решение за полчаса я решил написать эту статью.
+В общем, суть: "Есть квадратная шахматная доска произвольного размера, на ней в произвольной клетке стоит конь, больше никаких фигур на доске нет. Необходимо пройти конём через все клетки шахматной доски, побывав в каждой ровно один раз, либо доказать что это сделать невозможно". 
+Так как никаких конкретных условий, определяющих размер доски и начальную позицию коня нет, делать абстрактные математические умозаключения здесь довольно сложно, утомительно и не рационально, так что самое очевидное решение - полный перебор. 
+
+Для начала определим структуры данных, которыми будем оперировать в наших функциях. Это позволит добиться более высокого уровня абстракции и значительно упростит решение. Кроме того определённые таким образом структуры делают код более детерминированным.
+
+# structs of data
+defmodule Position do
+	defstruct	first: 1, second: 1
+end
+defmodule GameState do
+	defstruct 	current_pos: %Position{}, path: []
+end
+
+Position - позиция коня на доске в какой-либо момент времени. Тут мы рассматриваем двумерный случай, но как будет видно далее, функциональный код устроен таким образом что это решение можно очень легко обобщить для пространства любой размерности.
+GameState - текущее состояние игры, однозначно определяется текущей позицией и пройденным путём.
+Как вы можете видеть, мы определяем для полей структур значения по умолчанию, таким образом получается что-то вроде конструктора класса. Структуры в Elixir основаны на типе данных map, и в использовании / синтаксисе очень на них похожи.
+
+defmodule Some do
+	defstruct	a: 1, b: nil
+end
+
+res = %Some{} # => %Some{a: 1, b: nil}
+is_map res # => true
+Map.keys res # => [:__struct__, :a, :b]
+Map.values res # => [Some, 1, nil]
+
+Далее пишем решение в общем виде. Функция init/1 принимает в качестве аргумента размер ребра (в данном случае стороны квадрата) доски, случайным образом определяет начальное положение коня (и соответственно состояние игры), информирует об этом пользователя с помощью функции inform_user_about_beginning/1, затем вызывает функцию game/2, которая возвращает множество возможных путей обхода, а затем функцию show_game_results/2, которая сообщает пользователю о результатах. Обратите внимание на оператор "|>". Он просто передаёт выражение слева в качестве первого аргумента функции справа. Задача решена, осталось определить функции которые ещё не определены.
+
+def init(limit) when (is_integer(limit) and (limit > 0)) do
+	:random.seed(:erlang.now)
+	[
+		%GameState{	current_pos: %Position{
+						first: :random.uniform(limit),
+						second: :random.uniform(limit)}
+							|> inform_user_about_beginning   }
+	]
+		|> game(limit)
+			|> show_game_results(limit)
+end
+
+Для функции inform_user_about_beginning думаю всё ясно - принимает агрумент, выводит его на экран и его же возвращает.
+
+defp inform_user_about_beginning info do
+	IO.puts "Hello, user, we begin from #{inspect info}"
+	info
+end
+
+Функция show_game_results чуть сложнее. В результате работы нашего алгоритма мы должны получить список возможных путей обхода. Естественно мы хотим видеть разные сообщения для слуая пустого и не пустого списка. Вместо if-else или case выражений внутри одной функции в данном случае лучше написать две отдельные клаузы (clause) функции show_game_results/2. Это упрощает код, делает его более наглядным и читаемым. Общее правило такое: при вызове функции начинают перебираться клаузы для данной функции, в том порядке в котором они выписаны в коде. При этом производится pattern matching всех аргументов функции в данной клаузе и соответствующих им переданных извне аргументов. Если pattern matching удался, функцией возвращается выражение данной клаузы, если нет - берётся следующая клауза. Если ни одна клауза не подошла, бросается исключение.
+
+defp show_game_results([], limit) do
+	IO.puts "FAIL. This is no any way to go through desk #{limit}x#{limit} from this position."
+end
+
+defp show_game_results([%GameState{current_pos: current_pos, path: path} | rest_way], limit) do
+	"""
+	SUCCESS! There are #{length(rest_way)+1} ways to go through desk #{limit}x#{limit} from this position.
+	Here one of them: 
+	"""
+		|> IO.puts 
+	Enum.each( path++[current_pos] , &(IO.puts "\t#{inspect &1}") )
+end
+
+Обратите внимание на вторую клаузу, там используется разбиение списка на голову и хвост, типичное для ФП. В данном случае цель такого разбиения - получить первый путь обхода из списка найденных путей обхода прямо в аргументе функции, избавив себя от надобности делать это где-то в теле функции. В Elixir как в и в Erlang список может быть либо пустым ([]), либо быть разбитым на голову и хвост, где хвост - список.
+
+lst = [1,2,3] # => [1, 2, 3]
+[a | rest] = lst # => [1, 2, 3]
+a # => 1
+rest # => [2, 3]
+lst2 = [0 | lst] # => [0, 1, 2, 3]
+[first|rest] = [0] # => [0]
+first # => 0
+rest # => []
+
+Также в конце второй клаузы есть функция высшего порядка. Фактически функция Enum.each/2 здесь проходит по всем элементам списка и применяет к каждому элементу функцию, которую сама принимает в качестве второго аргумента (в данном случае просто выводит на экран). Далее в тексте будет ещё несколько функций из модуля Enum, чтобы не было по этому поводу вопросов сразу кратко опишу как они работают:
+
+Enum.map( lst, func/1 ) - возвращает спискок, состоящий из элементов func(el), где el - элемент списка lst
+Enum.filter(lst, func/1) - возвращает список из элементов списка lst, для которых func(el) == true
+Enum.reduce( lst, res, func/2 ) - возвращает значение Enum.reduce(rest, func(el, res), func/2), где [el | rest] = lst, причём Enum.reduce([], some_res, func/2) == some_res
+
+Теперь определим недостающую функцию game/2. Если мы получаем пустой список возможных состояний игры (а значит и путей обхода) - нам ничего не остаётся с ним делать кроме как вернуть. Если же список не пуст, проверяем достигли ли конца обхода, и в зависимости от этого либо возвращаем список путей обхода, либо продолжаем обход.
+
+	defp game([], _limit) do [] end
+	defp game(lst, limit) do
+		case game_over?(lst, limit) do
+			true -> lst
+			false -> Enum.map(lst,
+						&(generate_new_list_and_game_next(&1, limit)))
+							|> List.flatten
+		end
+	end
+
+	defp game_over?([%GameState{path: path}| _rest], limit) do
+		length(path) == (limit*limit - 1)
+	end 
+
+Во второй клаузе функции game/2 есть case - выражение. На первый взгляд оно напоминает сишный switch, но в реальности по своей природе case - это практически то же самое что и обычная функция в ЯП Elixir. Суть такова: 
+
+case (выражение_0) do
+	клауза_1 -> выражение_1
+	клауза_2 -> выражение_2
+	...
+	клауза_n -> выражение_n
+end
+
+Производится последовательный pattern matching каждой клаузы начиная с первой c результатом выполнения выражения 0, и если он прошёл успешно, case - конструкция возвращает соответствующее этой клаузе выражение. Если не одна клауза не подошла - следует exception.
+
+
+Далее нам необходимо определить функцию generate_new_list_and_game_next/2, которая примет состояние игры на шаге n, преобразует её в список состояний игры на шаге n+1 (ведь из любой клетки конь по условиям данной задачи может сделать ход на некоторое количество клеток от 0 до 8, в зависимости от состояния на шаге n), а затем передаст данный список в функцию game/2. Чтобы написать данную функцию, в первую очередь нужно знать каким образом ходит конь. Вне зависимости от начальных условий, все возможные перемещения коня нам известны ещё до начала работы алгоритма (для ферзя например это неверно - в этом случае множество возможных перемещений связано с размером доски). Поэтому работу по вычислению всех теоретически возможных ходов коня можно (и нужно) поместить в compile-time. Для этого напишем в отдельном модуле функцию make_permutations/4. Первый def не содержит do-end блока и используется чтобы ввести аргументы по умолчанию.
+
+defmodule Permutations do
+	def make_permutations( input_set, perm_size, condition, result \\ [])
+	def make_permutations( _input_set, perm_size, condition, result ) when (length(result) == perm_size) do
+		case condition.(result) do
+			true -> List.to_tuple(result)
+			false -> :failed
+		end
+	end
+	def make_permutations( input_set, perm_size, condition, result ) when (length(input_set)+length(result) >= perm_size) do
+
+		Enum.map( input_set, 
+			fn(input_el) ->
+				make_permutations( 	input_set--[input_el],
+									perm_size,
+									condition,
+									result++[input_el] )
+			end )
+				|> List.flatten
+					|> Enum.filter(&(&1 != :failed))
+	end
+end
+
+В функции make_permutations/4 просто получаем все престановки элементов из множества input_set длиной perm_size, которые удовлетворяют условию condition.
+А в модуле, в котором мы хотим использовать результат конкретных вычислений - просто напишем :
+
+@horse_ways Permutations.make_permutations([-1, -2, 1, 2], 2, fn(lst) -> Enum.reduce(lst, 0, &(abs(&1)+&2)) == 3 end )
+
+@ - обозначение атрибута модуля. Выражение, стоящее сразу после него вычисляется
+при компиляции данного модуля. 
+Теперь мы готовы написать недостающий код. Здесь всё совсем тривиально, а названия функций и аргументов говорят сами за себя
+
+	defp generate_new_list_and_game_next(game_state = %GameState{current_pos: current_pos}, limit) do
+		@horse_ways
+			|> Enum.map( &(generate_new_position(current_pos, &1)) )
+				|> Enum.filter(&( can_go_here?(game_state, &1, limit) ))
+					|> Enum.map(&( go_here(game_state, &1) ))
+						|> game(limit)
+	end
+
+	defp generate_new_position(	%Position{first: first, second: second},
+								{delta1, delta2}  ) do
+		%Position{first: (first+delta1), second: (second+delta2)}
+	end
+
+	defp can_go_here?(	%GameState{current_pos: current_pos, path: path},
+						prompt = %Position{first: first, second: second},
+						limit   ) do
+		not(prompt in [current_pos | path]) and Enum.all?([first, second], &( (&1 <= limit) and (&1 > 0) ))
+	end
+
+	defp go_here( %GameState{current_pos: current_pos, path: path}, prompt ) do
+		%GameState{current_pos: prompt, path: path++[current_pos]}
+	end
+
+Полный листинг находится здесь.
+
+defmodule Permutations do
+	def make_permutations( input_set, perm_size, condition, result \\ [])
+	def make_permutations( _input_set, perm_size, condition, result ) when (length(result) == perm_size) do
+		case condition.(result) do
+			true -> List.to_tuple(result)
+			false -> :failed
+		end
+	end
+	def make_permutations( input_set, perm_size, condition, result ) when (length(input_set)+length(result) >= perm_size) do
+
+		Enum.map( input_set, 
+			fn(input_el) ->
+				make_permutations( 	input_set--[input_el],
+									perm_size,
+									condition,
+									result++[input_el] )
+			end )
+				|> List.flatten
+					|> Enum.filter(&(&1 != :failed))
+	end
+end
+
+defmodule Horse.Solution do
+
+	
+	#########################
+	### compile-time work ###
+	#########################
+
+	@horse_ways Permutations.make_permutations([-1, -2, 1, 2], 2, fn(lst) -> Enum.reduce(lst, 0, &(abs(&1)+&2)) == 3 end )
+
+	# structs of data
+	defmodule Position do
+		defstruct	first: 1, second: 1
+	end
+	defmodule GameState do
+		defstruct 	current_pos: %Position{}, path: []
+	end
+
+	####################
+	### runtime work ###
+	####################
+
+	def init(limit) when (is_integer(limit) and (limit > 0)) do
+		:random.seed(:erlang.now)
+		[
+			%GameState{current_pos: %Position{	first: :random.uniform(limit),
+												second: :random.uniform(limit)}
+													|> inform_user_about_beginning   }
+		]
+			|> game(limit)
+				|> show_game_results(limit)
+	end
+
+	defp inform_user_about_beginning info do
+		IO.puts "Hello, user, we begin from #{inspect info}"
+		info
+	end
+
+	defp game([], _limit) do [] end
+	defp game(lst, limit) do
+		case game_over?(lst, limit) do
+			true -> lst
+			false -> Enum.map(lst,
+						&(generate_new_list_and_game_next(&1, limit)))
+							|> List.flatten
+		end
+	end
+
+	defp game_over?([%GameState{path: path}| _rest], limit) do
+		length(path) == (limit*limit - 1)
+	end 
+
+	defp generate_new_list_and_game_next(game_state = %GameState{current_pos: current_pos}, limit) do
+		@horse_ways
+			|> Enum.map( &(generate_new_position(current_pos, &1)) )
+				|> Enum.filter(&( can_go_here?(game_state, &1, limit) ))
+					|> Enum.map(&( go_here(game_state, &1) ))
+						|> game(limit)
+	end
+
+	defp generate_new_position(	%Position{first: first, second: second},
+								{delta1, delta2}  ) do
+		%Position{first: (first+delta1), second: (second+delta2)}
+	end
+
+	defp can_go_here?(	%GameState{current_pos: current_pos, path: path},
+						prompt = %Position{first: first, second: second},
+						limit   ) do
+		not(prompt in [current_pos | path]) and Enum.all?([first, second], &( (&1 <= limit) and (&1 > 0) ))
+	end
+
+	defp go_here( %GameState{current_pos: current_pos, path: path}, prompt ) do
+		%GameState{current_pos: prompt, path: path++[current_pos]}
+	end
+
+	defp show_game_results([], limit) do
+		IO.puts "FAIL. This is no any way to go through desk #{limit}x#{limit} from this position."
+	end
+
+	defp show_game_results([%GameState{current_pos: current_pos, path: path} | rest_way], limit) do
+		"""
+		SUCCESS! There are #{length(rest_way)+1} ways to go through desk #{limit}x#{limit} from this position.
+		Here one of them: 
+		"""
+			|> IO.puts 
+		Enum.each( path++[current_pos] , &(IO.puts "\t#{inspect &1}") )
+	end
+
+end
+
+
+

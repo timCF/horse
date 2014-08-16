@@ -1,5 +1,4 @@
-	defmodule Permutations do
-	# suppose all elements in input_set are UNIQUE
+defmodule Permutations do
 	def make_permutations( input_set, perm_size, condition, result \\ [])
 	def make_permutations( _input_set, perm_size, condition, result ) when (length(result) == perm_size) do
 		case condition.(result) do
@@ -7,7 +6,7 @@
 			false -> :failed
 		end
 	end
-	def make_permutations( input_set, perm_size, condition, result ) do
+	def make_permutations( input_set, perm_size, condition, result ) when (length(input_set)+length(result) >= perm_size) do
 
 		Enum.map( input_set, 
 			fn(input_el) ->
@@ -19,8 +18,7 @@
 				|> List.flatten
 					|> Enum.filter(&(&1 != :failed))
 	end
-
-	end
+end
 
 defmodule Horse.Solution do
 
@@ -29,7 +27,6 @@ defmodule Horse.Solution do
 	### compile-time work ###
 	#########################
 
-	@timeout :timer.hours(1)
 	@horse_ways Permutations.make_permutations([-1, -2, 1, 2], 2, fn(lst) -> Enum.reduce(lst, 0, &(abs(&1)+&2)) == 3 end )
 
 	# structs of data
@@ -38,10 +35,6 @@ defmodule Horse.Solution do
 	end
 	defmodule GameState do
 		defstruct 	current_pos: %Position{}, path: []
-	end
-
-	def demo do
-		Enum.each(@horse_ways, &(IO.inspect &1))
 	end
 
 	####################
@@ -68,12 +61,9 @@ defmodule Horse.Solution do
 	defp game(lst, limit) do
 		case game_over?(lst, limit) do
 			true -> lst
-			false -> Enum.map(lst,  &( ExTask.run( fn() -> 
-										generate_new_list_and_game_next(&1, limit)
-									end )))
-						|> Enum.map( &(ExTask.await(&1, @timeout)) )
-							|> Enum.map( fn({:result, data}) -> data end )
-								|> List.flatten
+			false -> Enum.map(lst,
+						&(generate_new_list_and_game_next(&1, limit)))
+							|> List.flatten
 		end
 	end
 
@@ -82,24 +72,15 @@ defmodule Horse.Solution do
 	end 
 
 	defp generate_new_list_and_game_next(game_state = %GameState{current_pos: current_pos}, limit) do
-		[
-			generate_new_position(current_pos, 2, -1),
-			generate_new_position(current_pos, 2, 1),
-			generate_new_position(current_pos, 1, 2),
-			generate_new_position(current_pos, -1, 2),
-			generate_new_position(current_pos, -2, 1),
-			generate_new_position(current_pos, -2, -1),
-			generate_new_position(current_pos, -1, -2),
-			generate_new_position(current_pos, 1, -2)
-		] 
-			|> Enum.filter(&( can_go_here?(game_state, &1, limit) ))
-				|> Enum.map(&( go_here(game_state, &1) ))
-					|> game(limit)
+		@horse_ways
+			|> Enum.map( &(generate_new_position(current_pos, &1)) )
+				|> Enum.filter(&( can_go_here?(game_state, &1, limit) ))
+					|> Enum.map(&( go_here(game_state, &1) ))
+						|> game(limit)
 	end
 
 	defp generate_new_position(	%Position{first: first, second: second},
-								delta1,
-								delta2) do
+								{delta1, delta2}  ) do
 		%Position{first: (first+delta1), second: (second+delta2)}
 	end
 
