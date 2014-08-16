@@ -17,3 +17,13 @@ defmodule Horse do
     Supervisor.start_link(children, opts)
   end
 end
+
+defmodule Some do
+  def receiver do
+    receive do
+      "hello" ->  IO.puts "hello from receiver"
+                  receiver
+      "please, die" -> IO.puts "OK ... "
+    end
+  end
+end

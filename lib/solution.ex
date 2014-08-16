@@ -20,6 +20,53 @@ defmodule Permutations do
 	end
 end
 
+defmodule ParallelEnum do
+
+	@pgname "ParallelEnum_process_group"
+
+	def map lst, func, limit \\ 2
+	def map lst, func, limit do
+		IO.puts "main proc #{inspect self}"
+		Enum.reduce(lst, [], fn(el, res) -> res++[try_make_child(el, func, limit)] end)
+			|> Enum.map( &collect_results/1 )
+	end
+
+	defmodule IntermediateResult do
+		defstruct child_pid: nil, my_own_result: nil
+	end
+
+	defp worker(daddy, func, arg) do
+		IO.inspect send daddy, %{ from: self, result: func.(arg)}
+	end
+
+	defp try_make_child(arg, func, limit) do
+		case can_make_child?(limit) do
+			false ->
+				%IntermediateResult{child_pid: nil,
+									my_own_result: func.(arg)} # in this case do work yourself haha 
+			true -> 
+				%IntermediateResult{child_pid: spawn_link(fn() -> worker(self, func, arg) end),
+									my_own_result: nil} 
+		end
+	end
+
+	defp can_make_child?(limit) do
+		:pg2.create @pgname
+		length(:pg2.get_members @pgname) < limit
+	end
+
+	defp collect_results( %IntermediateResult{child_pid: nil, my_own_result: result}) do
+		result
+	end
+	defp collect_results( %IntermediateResult{child_pid: pid, my_own_result: nil}) do
+		IO.puts "collecter proc #{inspect self}"
+		receive do
+			%{ from: incoming_pid, result: result} when (incoming_pid == pid) -> result
+		end
+	end
+
+end
+
 defmodule Horse.Solution do
 
 	
