@@ -22,44 +22,68 @@ end
 
 defmodule ParallelEnum do
 
-	@pgname "ParallelEnum_process_group"
+	@controller :parallel_enum_control_system
 
-	def map lst, func, limit \\ 2
-	def map lst, func, limit do
-		IO.puts "main proc #{inspect self}"
-		Enum.reduce(lst, [], fn(el, res) -> res++[try_make_child(el, func, limit)] end)
-			|> Enum.map( &collect_results/1 )
-	end
+	############
+	## public ##
+	############
 
 	defmodule IntermediateResult do
 		defstruct child_pid: nil, my_own_result: nil
 	end
 
-	defp worker(daddy, func, arg) do
-		IO.inspect send daddy, %{ from: self, result: func.(arg)}
+	def parallel_enum_control_system number \\ 1 do
+		receive do
+			%{ from: sender, query: :get_number} -> 
+						send sender, number
+						parallel_enum_control_system number
+			:increment -> parallel_enum_control_system number+1
+			:decrement -> parallel_enum_control_system number-1
+			some -> IO.puts "WARNING! Unexpected message in parallel_enum_control_system: #{inspect some}"
+		end
 	end
 
+	def worker(daddy, func, arg) do
+		send @controller, :increment
+		send daddy, %{ from: self, result: func.(arg)}
+		send @controller, :decrement
+	end
+
+	def map lst, func, limit \\ 2 do
+		if (:erlang.whereis(@controller) == :undefined ) do
+			:erlang.register( @controller,
+			spawn(ParallelEnum, :parallel_enum_control_system, [1]) )
+		end
+		Enum.map(lst, &(try_make_child(&1, func, limit)))
+			|> Enum.map( &collect_results/1 )
+	end
+
+	#############
+	## private ##
+	#############
+
 	defp try_make_child(arg, func, limit) do
-		case can_make_child?(limit) do
+		case  (get_number_of_processes < limit) do
 			false ->
 				%IntermediateResult{child_pid: nil,
 									my_own_result: func.(arg)} # in this case do work yourself haha 
 			true -> 
-				%IntermediateResult{child_pid: spawn_link(fn() -> worker(self, func, arg) end),
+				%IntermediateResult{child_pid: spawn_link(ParallelEnum, :worker, [self, func, arg]),
 									my_own_result: nil} 
 		end
 	end
 
-	defp can_make_child?(limit) do
-		:pg2.create @pgname
-		length(:pg2.get_members @pgname) < limit
+	defp get_number_of_processes do
+		send @controller, %{ from: self, query: :get_number }
+		receive do
+			num when is_integer(num) -> num
+		end
 	end
 
 	defp collect_results( %IntermediateResult{child_pid: nil, my_own_result: result}) do
 		result
 	end
 	defp collect_results( %IntermediateResult{child_pid: pid, my_own_result: nil}) do
-		IO.puts "collecter proc #{inspect self}"
 		receive do
 			%{ from: incoming_pid, result: result} when (incoming_pid == pid) -> result
 		end
@@ -84,18 +108,41 @@ defmodule Horse.Solution do
 		defstruct 	current_pos: %Position{}, path: []
 	end
 
+	############################
+	### test of performance ####
+	############################
+
+	def test_of_performance do
+		Enum.each( 1..25, fn(num) -> test_of_performance_process(num) end )
+		Enum.each( [50, 75, 100, 150, 200, 250, 500, 1000], 
+			fn(num) -> test_of_performance_process(num) end )
+	end
+
+	defp test_of_performance_process(num) do
+		{res, _} = :timer.tc( fn() -> init(5, num, %Position{}) end )
+		File.write "./test_results", "#{num} #{res}\n", [:append]
+	end
+
+
 	####################
 	### runtime work ###
 	####################
 
-	def init(limit) when (is_integer(limit) and (limit > 0)) do
+	def init(limit, number_of_processes \\ 2, begin_pos \\ nil ) when (is_integer(limit) and (limit > 0) and (is_integer(number_of_processes)) and (number_of_processes > 0)) do
 		:random.seed(:erlang.now)
 		[
-			%GameState{current_pos: %Position{	first: :random.uniform(limit),
-												second: :random.uniform(limit)}
-													|> inform_user_about_beginning   }
+			%GameState{current_pos: 
+				case begin_pos do
+
+					%Position{} -> 	begin_pos
+										|> inform_user_about_beginning
+
+					_ -> %Position{	first: :random.uniform(limit),
+									second: :random.uniform(limit) }
+											|> inform_user_about_beginning  
+				end  }
 		]
-			|> game(limit)
+			|> game(limit, number_of_processes)
 				|> show_game_results(limit)
 	end
 
@@ -104,12 +151,13 @@ defmodule Horse.Solution do
 		info
 	end
 
-	defp game([], _limit) do [] end
-	defp game(lst, limit) do
+	defp game([], _limit, _number_of_processes) do [] end
+	defp game(lst, limit, number_of_processes) do
 		case game_over?(lst, limit) do
 			true -> lst
-			false -> Enum.map(lst,
-						&(generate_new_list_and_game_next(&1, limit)))
+			false -> ParallelEnum.map(lst,
+						&(generate_new_list_and_game_next(&1, limit, number_of_processes)),
+						number_of_processes)
 							|> List.flatten
 		end
 	end
@@ -118,12 +166,12 @@ defmodule Horse.Solution do
 		length(path) == (limit*limit - 1)
 	end 
 
-	defp generate_new_list_and_game_next(game_state = %GameState{current_pos: current_pos}, limit) do
+	defp generate_new_list_and_game_next(game_state = %GameState{current_pos: current_pos}, limit, number_of_processes) do
 		@horse_ways
 			|> Enum.map( &(generate_new_position(current_pos, &1)) )
 				|> Enum.filter(&( can_go_here?(game_state, &1, limit) ))
 					|> Enum.map(&( go_here(game_state, &1) ))
-						|> game(limit)
+						|> game(limit, number_of_processes)
 	end
 
 	defp generate_new_position(	%Position{first: first, second: second},
