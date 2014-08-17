@@ -40,6 +40,7 @@ defmodule ParallelEnum do
 			:increment -> parallel_enum_control_system number+1
 			:decrement -> parallel_enum_control_system number-1
 			some -> IO.puts "WARNING! Unexpected message in parallel_enum_control_system: #{inspect some}"
+					parallel_enum_control_system number
 		end
 	end
 
@@ -115,6 +116,9 @@ defmodule Horse.Solution do
 	def test_of_performance do
 		Enum.each( 1..25, fn(num) -> test_of_performance_process(num) end )
 		Enum.each( [50, 75, 100, 150, 200, 250, 500, 1000], 
+			fn(num) -> test_of_performance_process(num) end )
+		# to test this, add +P 100000000 flag when starting iex
+		Enum.each( [10000, 50000, 100000, 500000, 1000000, 5000000, 10000000], 
 			fn(num) -> test_of_performance_process(num) end )
 	end
 
